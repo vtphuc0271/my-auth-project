@@ -1,25 +1,27 @@
-// src/App.js
-import React from 'react';
-import { BrowserRouter as Router, Link } from 'react-router-dom';
-import AppRoutes from './routes/authRoutes';
-import { AuthProvider, useAuth } from './context/authContext';
-import { AppBar, Toolbar, Typography, Button, Box, Container } from '@mui/material';
+import React from "react";
+import { BrowserRouter as Router, Link } from "react-router-dom";
+import AppRoutes from "./routes/authRoutes";
+import { AuthProvider, useAuth } from "./context/authContext";
+import { AppBar, Toolbar, Typography, Button, Box, Container } from "@mui/material";
 
-// Component thanh điều hướng
 const Navigation = () => {
-  const { isAuthenticated, logout } = useAuth();
-
+  const { isAuthenticated, username, logout } = useAuth();
   return (
     <AppBar position="static" color="primary">
-      <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+      <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
         <Typography variant="h6" color="inherit">
           My Auth App
         </Typography>
         <Box>
           {isAuthenticated ? (
-            <Button color="inherit" onClick={logout}>
-              Đăng Xuất
-            </Button>
+            <>
+              <Typography variant="body1" color="inherit" sx={{ display: "inline", mr: 2 }}>
+                Xin chào, {username}
+              </Typography>
+              <Button color="inherit" onClick={logout}>
+                Đăng Xuất
+              </Button>
+            </>
           ) : (
             <>
               <Button color="inherit" component={Link} to="/">

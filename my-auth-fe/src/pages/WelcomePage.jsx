@@ -1,5 +1,5 @@
 // src/components/WelcomePage.jsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
 import {
@@ -35,18 +35,24 @@ const LogoutButton = styled(Button)(({ theme }) => ({
 const WelcomePage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, username, logout } = useAuth();
+  const [loading, setLoading] = useState(true); // Thêm trạng thái loading
 
   // Kiểm tra trạng thái đăng nhập
   useEffect(() => {
     if (!isAuthenticated) {
       navigate('/'); // Điều hướng về trang đăng nhập nếu chưa đăng nhập
     }
+    setLoading(false); // Đã kiểm tra xong
   }, [isAuthenticated, navigate]);
 
   const handleLogout = () => {
     logout(); // Gọi hàm logout từ AuthContext
     navigate('/'); // Điều hướng về trang đăng nhập
   };
+
+  if (loading) {
+    return null; // Hiển thị loading hoặc spinner trong khi kiểm tra
+  }
 
   if (!isAuthenticated) {
     return null; // Không render nếu chưa đăng nhập
