@@ -1,56 +1,97 @@
-import React, { useState } from 'react';
-import { login } from '../services/authService';
+// src/components/LoginForm.jsx
+import React from 'react';
 import { useNavigate } from 'react-router-dom';
+import { login } from '../services/authService';
+import { useAuth } from '../context/authContext';
+import useForm from '../hooks/useForm';
 import { Box, TextField, Button, Typography, Paper } from '@mui/material';
 
 const LoginForm = () => {
   const navigate = useNavigate();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const { login: authLogin } = useAuth();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-    setError(null);
+  const validate = (values) => {
+    const errors = {};
+    const usernameRegex = /^[a-zA-Z0-9_]+$/;
 
-    try {
-      const result = await login({ username, password });
-      localStorage.setItem('authToken', result.token || '');
-      localStorage.setItem('username', username);
-      navigate('/welcome');
-    } catch (err) {
-      setError(err.response?.data?.message || 'Đăng nhập thất bại');
-    } finally {
-      setLoading(false);
+    if (!values.username) {
+      errors.username = 'Username là bắt buộc';
+    } else if (!usernameRegex.test(values.username)) {
+      errors.username = 'Username không được chứa ký tự đặc biệt';
     }
+
+    if (!values.password) {
+      errors.password = 'Password là bắt buộc';
+    } else if (values.password.length < 6) {
+      errors.password = 'Password phải ít nhất 6 ký tự';
+    }
+
+    return errors;
   };
 
+  // Logic xử lý submit (truyền vào useForm)
+  const onSubmit = async (values) => {
+    const result = await login(values);
+    authLogin(result.token || '', values.username);
+    navigate('/welcome');
+  };
+
+  const { values, errors, serverError, loading, handleChange, handleSubmit } = useForm(
+    { username: '', password: '' },
+    validate,
+    onSubmit // Truyền onSubmit thay vì handleSubmit
+  );
+
   return (
-    <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh" bgcolor="#f0f2f5">
-      <Paper elevation={3} sx={{ padding: 4, width: 350 }}>
-        <Typography variant="h5" fontWeight={600} mb={3}>Đăng Nhập</Typography>
-        <form onSubmit={handleLogin}>
+    <Box
+      sx={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '80vh',
+      }}
+    >
+      <Paper elevation={3} sx={{ p: 4, width: '100%', maxWidth: 400 }}>
+        <Typography variant="h5" align="center" gutterBottom>
+          Đăng Nhập
+        </Typography>
+        <form onSubmit={handleSubmit}>
           <TextField
-            fullWidth
             label="Username"
-            margin="normal"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            name="username"
+            value={values.username}
+            onChange={handleChange}
             required
+            fullWidth
+            margin="normal"
+            error={!!errors.username}
+            helperText={errors.username}
           />
           <TextField
-            fullWidth
-            type="password"
             label="Password"
-            margin="normal"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
+            name="password"
+            type="password"
+            value={values.password}
+            onChange={handleChange}
             required
+            fullWidth
+            margin="normal"
+            error={!!errors.password}
+            helperText={errors.password}
           />
-          {error && <Typography color="error" mt={1}>{error}</Typography>}
-          <Button type="submit" fullWidth variant="contained" sx={{ mt: 2 }} disabled={loading}>
+          {serverError && (
+            <Typography color="error" align="center" sx={{ mt: 2 }}>
+              {serverError}
+            </Typography>
+          )}
+          <Button
+            type="submit"
+            variant="contained"
+            color="primary"
+            fullWidth
+            disabled={loading}
+            sx={{ mt: 2 }}
+          >
             {loading ? 'Đang đăng nhập...' : 'Đăng Nhập'}
           </Button>
         </form>

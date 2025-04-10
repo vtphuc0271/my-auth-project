@@ -1,29 +1,52 @@
-import React from "react";
-import { BrowserRouter as Router, Routes, Route, Link } from "react-router-dom";
-import LoginForm from "./components/LoginForm";
-import RegisterForm from "./components/RegisterForm";
-import WelcomePage from "./components/WelcomePage";
-import { Box, Button } from "@mui/material";
+// src/App.js
+import React from 'react';
+import { BrowserRouter as Router, Link } from 'react-router-dom';
+import AppRoutes from './routes/authRoutes';
+import { AuthProvider, useAuth } from './context/authContext';
+import { AppBar, Toolbar, Typography, Button, Box, Container } from '@mui/material';
+
+// Component thanh điều hướng
+const Navigation = () => {
+  const { isAuthenticated, logout } = useAuth();
+
+  return (
+    <AppBar position="static" color="primary">
+      <Toolbar sx={{ display: 'flex', justifyContent: 'space-between' }}>
+        <Typography variant="h6" color="inherit">
+          My Auth App
+        </Typography>
+        <Box>
+          {isAuthenticated ? (
+            <Button color="inherit" onClick={logout}>
+              Đăng Xuất
+            </Button>
+          ) : (
+            <>
+              <Button color="inherit" component={Link} to="/">
+                Đăng Nhập
+              </Button>
+              <Button color="inherit" component={Link} to="/register">
+                Đăng Ký
+              </Button>
+            </>
+          )}
+        </Box>
+      </Toolbar>
+    </AppBar>
+  );
+};
 
 function App() {
   return (
-    <Router>
-      <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2, p: 2 }}>
-        <Button variant="outlined" component={Link} to="/">Đăng Nhập</Button>
-        <Button variant="outlined" component={Link} to="/register">Đăng Ký</Button>
-      </Box>
-      <Routes>
-        <Route path="/" element={<LoginForm />} />
-        <Route path="/register" element={<RegisterForm />} />
-        <Route path="/welcome" element={<WelcomeWrapper />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Navigation />
+        <Container maxWidth="sm" sx={{ mt: 4 }}>
+          <AppRoutes />
+        </Container>
+      </Router>
+    </AuthProvider>
   );
 }
-
-const WelcomeWrapper = () => {
-  const username = localStorage.getItem("username") || "bạn";
-  return <WelcomePage username={username} />;
-};
 
 export default App;
