@@ -4,8 +4,9 @@ namespace Auth.Core.Interfaces
 {
     public interface IUserService
     {
+        Task<User?> AuthenticateAsync(string username, string password);
         Task<User> GetUserByUsername(string username);
         Task AddUser(User user);
-        Task<List<User>> GetAllUsers(); // Thêm phương thức này
+        Task<List<User>> GetAllUsers();
     }
 }

@@ -2,8 +2,9 @@
 using Auth.Core.Models;
 using Microsoft.AspNetCore.Mvc;
 using Auth.Infrastructure;
-using BCrypt.Net;
 using Microsoft.AspNetCore.Authorization;
+using Auth.Core.DTOs;
+using System.Security.Claims; // Thêm để lấy UserId từ token
 
 namespace AuthApi.Controllers
 {
@@ -20,25 +21,37 @@ namespace AuthApi.Controllers
             _context = context;
         }
 
+        [AllowAnonymous]
         [HttpPost("register")]
-        public async Task<IActionResult> Register([FromBody] User user)
+        public async Task<IActionResult> Register([FromBody] RegisterRequest request)
         {
             if (!ModelState.IsValid)
             {
-                return BadRequest(ModelState);
+                return BadRequest(new ApiResponse<object>(false, "Dữ liệu không hợp lệ", null));
             }
 
-            var existingUser = await _userService.GetUserByUsername(user.Username);
+            if (request.Password != request.ConfirmPassword)
+            {
+                return BadRequest(new ApiResponse<object>(false, "Mật khẩu xác nhận không khớp", null));
+            }
+
+            var existingUser = await _userService.GetUserByUsername(request.Username);
             if (existingUser != null)
             {
-                return BadRequest(new { message = "Username đã tồn tại" });
+                return BadRequest(new ApiResponse<object>(false, "Username đã tồn tại", null));
             }
 
-            user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
-            user.Id = Guid.NewGuid();
+            var user = new User
+            {
+                Id = Guid.NewGuid(),
+                Username = request.Username,
+                Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                PhoneNumber = null
+            };
+
             await _userService.AddUser(user);
 
-            return Ok(new { message = "Đăng ký thành công!" });
+            return Ok(new ApiResponse<object>(true, "Đăng ký thành công", null));
         }
 
         [Authorize]
@@ -46,7 +59,7 @@ namespace AuthApi.Controllers
         public async Task<IActionResult> GetAll()
         {
             var users = await _userService.GetAllUsers();
-            return Ok(users);
+            return Ok(new ApiResponse<IEnumerable<User>>(true, "Lấy danh sách người dùng thành công", users));
         }
 
         [Authorize]
@@ -63,7 +76,38 @@ namespace AuthApi.Controllers
                 }
             }
             await _context.SaveChangesAsync();
-            return Ok(new { message = "Cập nhật mật khẩu thành công!" });
+            return Ok(new ApiResponse<object>(true, "Cập nhật mật khẩu thành công", null));
+        }
+
+        [Authorize]
+        [HttpPost("update-phone")]
+        public async Task<IActionResult> UpdatePhone([FromBody] UpdatePhoneRequest request)
+        {
+            if (!ModelState.IsValid)
+            {
+                return BadRequest(new ApiResponse<object>(false, "Dữ liệu không hợp lệ", null));
+            }
+
+            // Lấy UserId từ JWT token
+            var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var userId))
+            {
+                return Unauthorized(new ApiResponse<object>(false, "Không thể xác định người dùng", null));
+            }
+
+            // Tìm user trong DB
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+            {
+                return NotFound(new ApiResponse<object>(false, "Người dùng không tồn tại", null));
+            }
+
+            // Cập nhật PhoneNumber
+            user.PhoneNumber = request.PhoneNumber;
+            _context.Users.Update(user);
+            await _context.SaveChangesAsync();
+
+            return Ok(new ApiResponse<object>(true, "Cập nhật số điện thoại thành công", null));
         }
     }
 }

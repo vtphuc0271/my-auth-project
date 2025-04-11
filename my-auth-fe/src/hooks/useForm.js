@@ -1,5 +1,5 @@
 // src/hooks/useForm.js
-import { useState } from 'react';
+import { useState, useCallback } from "react";
 
 const useForm = (initialValues, validate, onSubmit) => {
   const [values, setValues] = useState(initialValues);
@@ -7,13 +7,25 @@ const useForm = (initialValues, validate, onSubmit) => {
   const [loading, setLoading] = useState(false);
   const [serverError, setServerError] = useState(null);
 
-  const handleChange = (e) => {
+  // Xử lý thay đổi input
+  const handleChange = useCallback((e) => {
     const { name, value } = e.target;
-    setValues({ ...values, [name]: value });
-    const validationErrors = validate({ ...values, [name]: value });
-    setErrors(validationErrors);
-  };
 
+    setValues((prev) => {
+      const newValues = { ...prev, [name]: value };
+      setErrors(validate(newValues));
+      return newValues;
+    });
+  }, [validate]);
+
+  // Tùy chọn: kiểm tra lỗi khi rời khỏi input
+  const handleBlur = useCallback((e) => {
+    const { name } = e.target;
+    const fieldErrors = validate(values);
+    setErrors((prev) => ({ ...prev, [name]: fieldErrors[name] }));
+  }, [validate, values]);
+
+  // Xử lý submit form
   const handleSubmit = async (e) => {
     e.preventDefault();
     const validationErrors = validate(values);
@@ -23,9 +35,11 @@ const useForm = (initialValues, validate, onSubmit) => {
       setLoading(true);
       setServerError(null);
       try {
-        await onSubmit(values); // Gọi onSubmit từ tham số
+        await onSubmit(values);
       } catch (err) {
-        setServerError(err.response?.data?.message || 'Có lỗi xảy ra');
+        const message =
+          err.response?.data?.message || err.message || "Có lỗi xảy ra";
+        setServerError(message);
       } finally {
         setLoading(false);
       }
@@ -35,10 +49,13 @@ const useForm = (initialValues, validate, onSubmit) => {
   return {
     values,
     errors,
-    serverError,
     loading,
+    serverError,
     handleChange,
+    handleBlur,
     handleSubmit,
+    setValues,    // tiện để reset form nếu cần
+    setErrors,    // tùy chỉnh lỗi từ ngoài (ví dụ: sau khi submit)
   };
 };
 

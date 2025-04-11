@@ -16,6 +16,7 @@
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
     "framer-motion": "^12.6.3",
+    "js-cookie": "^3.0.5",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-router-dom": "^7.5.0",

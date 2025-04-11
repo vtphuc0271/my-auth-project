@@ -34,8 +34,8 @@ const RegisterForm = () => {
       await register(values); // Gọi API đăng ký
       setSuccessMessage('Đăng ký thành công! Đang chuyển hướng...'); // Hiển thị thông báo
       setTimeout(() => {
-        navigate('/'); // Điều hướng về trang đăng nhập sau 2 giây
-      }, 2000);
+        navigate('/'); // Điều hướng về trang đăng nhập sau 1 giây
+      }, 1000);
     } catch (error) {
       throw error; // Ném lỗi để useForm xử lý và hiển thị serverError
     }

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/authContext";
 import useForm from "../hooks/useForm";
@@ -6,7 +6,11 @@ import { Box, TextField, Button, Typography, Paper } from "@mui/material";
 
 const LoginForm = () => {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, verifyOtp } = useAuth();
+  const [requiresOtp, setRequiresOtp] = useState(false);
+  const [userId, setUserId] = useState(null);
+  const [otp, setOtp] = useState("");
+  const [otpMessage, setOtpMessage] = useState("");
 
   const validate = (values) => {
     const errors = {};
@@ -25,10 +29,26 @@ const LoginForm = () => {
 
   const onSubmit = async (values) => {
     try {
-      await login(values.username, values.password); // Gọi login từ AuthContext
-      navigate("/welcome"); // Chỉ chuyển hướng nếu không có lỗi
+      const result = await login(values.username, values.password);
+      if (result.requiresOtp) {
+        setRequiresOtp(true);
+        setUserId(result.userId);
+        setOtpMessage(`Nhập OTP: ${result.otpCode} (mock)`);
+      } else {
+        navigate("/welcome");
+      }
     } catch (err) {
-      throw err; // Ném lỗi để useForm hiển thị serverError
+      throw err;
+    }
+  };
+
+  const handleOtpSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      await verifyOtp(userId, otp);
+      navigate("/welcome");
+    } catch (err) {
+      setOtpMessage(err.message || "Xác thực OTP thất bại");
     }
   };
 
@@ -44,48 +64,74 @@ const LoginForm = () => {
         <Typography variant="h5" align="center" gutterBottom>
           Đăng Nhập
         </Typography>
-        <form onSubmit={handleSubmit}>
-          <TextField
-            label 
-   
-="Username"
-            name="username"
-            value={values.username}
-            onChange={handleChange}
-            required
-            fullWidth
-            margin="normal"
-            error={!!errors.username}
-            helperText={errors.username}
-          />
-          <TextField
-            label="Password"
-            name="password"
-            type="password"
-            value={values.password}
-            onChange={handleChange}
-            required
-            fullWidth
-            margin="normal"
-            error={!!errors.password}
-            helperText={errors.password}
-          />
-          {serverError && (
-            <Typography color="error" align="center" sx={{ mt: 2 }}>
-              {serverError}
-            </Typography>
-          )}
-          <Button
-            type="submit"
-            variant="contained"
-            color="primary"
-            fullWidth
-            disabled={loading}
-            sx={{ mt: 2 }}
-          >
-            {loading ? "Đang đăng nhập..." : "Đăng Nhập"}
-          </Button>
-        </form>
+
+        {!requiresOtp ? (
+          <form onSubmit={handleSubmit}>
+            <TextField
+              label="Username"
+              name="username"
+              value={values.username}
+              onChange={handleChange}
+              required
+              fullWidth
+              margin="normal"
+              error={!!errors.username}
+              helperText={errors.username}
+            />
+            <TextField
+              label="Password"
+              name="password"
+              type="password"
+              value={values.password}
+              onChange={handleChange}
+              required
+              fullWidth
+              margin="normal"
+              error={!!errors.password}
+              helperText={errors.password}
+            />
+            {serverError && (
+              <Typography color="error" align="center" sx={{ mt: 2 }}>
+                {serverError}
+              </Typography>
+            )}
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              fullWidth
+              disabled={loading}
+              sx={{ mt: 2 }}
+            >
+              {loading ? "Đang đăng nhập..." : "Đăng Nhập"}
+            </Button>
+          </form>
+        ) : (
+          <form onSubmit={handleOtpSubmit}>
+            <TextField
+              label="OTP"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              required
+              fullWidth
+              margin="normal"
+            />
+            {otpMessage && (
+              <Typography color={otpMessage.includes("thất bại") ? "error" : "info"} align="center" sx={{ mt: 2 }}>
+                {otpMessage}
+              </Typography>
+            )}
+            <Button
+              type="submit"
+              variant="contained"
+              color="primary"
+              fullWidth
+              sx={{ mt: 2 }}
+            >
+              Xác thực OTP
+            </Button>
+          </form>
+        )}
       </Paper>
     </Box>
   );

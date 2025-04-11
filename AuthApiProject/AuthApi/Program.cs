@@ -2,15 +2,26 @@ using Auth.Core.Interfaces;
 using Auth.Infrastructure;
 using Auth.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Authentication.JwtBearer; // Đảm bảo dòng này có mặt
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
-var jwtKey = Environment.GetEnvironmentVariable("JWT_KEY") ?? builder.Configuration["Jwt:Key"];
-
-// Add services to the container.
 builder.Services.AddControllers();
+
+// Cấu hình CORS để hỗ trợ cookie từ FE
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("https://localhost:3000")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
+});
+
+// Đăng ký các dịch vụ cơ bản
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -23,14 +34,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         builder.Configuration.GetConnectionString("DefaultConnection"),
         x => x.MigrationsAssembly("Auth.Infrastructure")));
 
-// Cấu hình xác thực JWT
+// Cấu hình xác thực sử dụng JWT
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
     options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
 })
-
-// Cấu hình xác thực JWT
 .AddJwtBearer(options =>
 {
     options.TokenValidationParameters = new TokenValidationParameters
@@ -41,35 +50,36 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
     };
-    // Lấy token từ cookie thay vì header Authorization
+
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
             var token = context.Request.Cookies["auth-token"];
+            Console.WriteLine($"Token from cookie (auth-token): {token}");
+            var csrfToken = context.Request.Cookies["X-CSRF-TOKEN"];
+            Console.WriteLine($"Token from cookie (X-CSRF-TOKEN): {csrfToken}");
             context.Token = token;
+            return Task.CompletedTask;
+        },
+        OnAuthenticationFailed = context =>
+        {
+            Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+            return Task.CompletedTask;
+        },
+        OnTokenValidated = context =>
+        {
+            Console.WriteLine("Token validated successfully");
             return Task.CompletedTask;
         }
     };
 });
 
-// Cấu hình CORS để hỗ trợ cookie
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowFrontend", policy =>
-    {
-        policy.WithOrigins("http://localhost:3000") // Origin của frontend
-              .AllowAnyHeader()
-              .AllowAnyMethod()
-              .AllowCredentials(); // Bắt buộc để gửi cookie
-    });
-});
-
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// Middleware pipeline
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -78,8 +88,9 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
-app.UseAuthentication(); // Phải trước UseAuthorization
+app.UseAuthentication();
 app.UseAuthorization();
+app.UseMiddleware<Auth.API.Middlewares.CsrfMiddleware>(); // Đã sửa middleware để bỏ qua [AllowAnonymous]
 app.MapControllers();
 
 app.Run();
