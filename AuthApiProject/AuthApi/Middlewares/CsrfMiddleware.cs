@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Authorization; // Thêm để kiểm tra AllowAnonymous
+using Microsoft.AspNetCore.Authorization;
 
 namespace Auth.API.Middlewares
 {
@@ -20,48 +20,63 @@ namespace Auth.API.Middlewares
         {
             var path = context.Request.Path.Value?.ToLower();
 
-            // Kiểm tra nếu endpoint có [AllowAnonymous], bỏ qua CSRF
+            // Bỏ qua CSRF cho [AllowAnonymous]
             var endpoint = context.GetEndpoint();
             if (endpoint?.Metadata?.GetMetadata<IAllowAnonymous>() != null)
             {
+                _logger.LogDebug("Bỏ qua CSRF vì [AllowAnonymous]: {Path}", path);
                 await _next(context);
                 return;
             }
 
-            // Kiểm tra CSRF chỉ áp dụng cho các phương thức thay đổi dữ liệu (POST, PUT, DELETE)
-            // Bỏ qua các endpoint không yêu cầu CSRF như login và logout
-            if ((HttpMethods.IsPost(context.Request.Method) ||
-                 HttpMethods.IsPut(context.Request.Method) ||
-                 HttpMethods.IsDelete(context.Request.Method)) &&
-                path != "/api/auth/login" &&
-                path != "/api/auth/logout")
+            // Bỏ qua CSRF cho các endpoint không yêu cầu xác thực
+            var bypassPaths = new[]
             {
-                // Lấy CSRF token từ cookie
-                var csrfCookie = context.Request.Cookies["X-CSRF-TOKEN"];
+                "/api/auth/login",
+                "/api/auth/logout",
+                "/api/auth/verify-otp",
+                "/api/account/register"
+            };
 
-                // Lấy CSRF token từ header
+            if (bypassPaths.Contains(path))
+            {
+                _logger.LogDebug("Bỏ qua CSRF cho endpoint: {Path}", path);
+                await _next(context);
+                return;
+            }
+
+            // Chỉ kiểm tra CSRF cho POST/PUT/DELETE
+            if (HttpMethods.IsPost(context.Request.Method) ||
+                HttpMethods.IsPut(context.Request.Method) ||
+                HttpMethods.IsDelete(context.Request.Method))
+            {
+                var csrfCookie = context.Request.Cookies["X-CSRF-TOKEN"];
                 var csrfHeader = context.Request.Headers["X-CSRF-TOKEN"].ToString();
 
-                // Kiểm tra sự tồn tại của CSRF token trong cookie
                 if (string.IsNullOrEmpty(csrfCookie))
                 {
-                    _logger.LogWarning("CSRF cookie is missing.");
+                    _logger.LogWarning("CSRF cookie thiếu: {Path}", path);
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     await context.Response.WriteAsync("CSRF token is missing.");
                     return;
                 }
 
-                // Kiểm tra tính khớp nối giữa token trong cookie và header
-                if (csrfCookie != csrfHeader)
+                if (string.IsNullOrEmpty(csrfHeader) || csrfCookie != csrfHeader)
                 {
-                    _logger.LogWarning("CSRF token mismatch. Cookie: {Cookie}, Header: {Header}", csrfCookie, csrfHeader);
+                    _logger.LogWarning("CSRF token không khớp. Cookie: {Cookie}, Header: {Header}, Path: {Path}", csrfCookie, csrfHeader, path);
                     context.Response.StatusCode = StatusCodes.Status403Forbidden;
                     await context.Response.WriteAsync("CSRF token mismatch.");
                     return;
                 }
+
+                _logger.LogDebug("CSRF token hợp lệ: {Path}", path);
+            }
+            else if (HttpMethods.IsGet(context.Request.Method) && path == "/api/auth/me")
+            {
+                // Đặc biệt cho /api/auth/me, chỉ cần auth-token
+                _logger.LogDebug("Bỏ qua CSRF check cho GET /api/auth/me");
             }
 
-            // Chuyển tiếp request nếu vượt qua kiểm tra CSRF hoặc không cần kiểm tra
             await _next(context);
         }
     }

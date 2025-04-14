@@ -1,4 +1,4 @@
-namespace Auth.Core.Models
+namespace AuthApi.DTOs
 {
     public class ApiResponse<T>
     {

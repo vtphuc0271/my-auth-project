@@ -1,3 +1,4 @@
+// src/services/authService.js
 import axios from "axios";
 import { API_URL } from "../config";
 import Cookies from "js-cookie";
@@ -38,6 +39,7 @@ export const login = async ({ username, password }) => {
     const response = await api.post("/api/Auth/login", { username, password });
     if (response.data.success) {
       const result = response.data.data;
+      localStorage.setItem("isLoggedIn", "true");
       if (result && result.requiresOtp) {
         // Cần OTP
         return {
@@ -65,13 +67,17 @@ export const login = async ({ username, password }) => {
   }
 };
 
+
+
 // Xác thực OTP
 export const verifyOtp = async ({ userId, otpCode }) => {
+  localStorage.setItem("isVerifying", "true");
   try {
     const response = await api.post("/api/Auth/verify-otp", { userId, otpCode });
     if (response.data.success) {
       const userResponse = await getCurrentUser();
       localStorage.setItem("isLoggedIn", "true");
+      localStorage.setItem("isVerifying", "false");
       return userResponse;
     } else {
       throw new Error(response.data.message);
@@ -79,6 +85,7 @@ export const verifyOtp = async ({ userId, otpCode }) => {
   } catch (error) {
     const message = error.response?.data?.message || "Xác thực OTP thất bại.";
     console.error("Verify OTP error:", error);
+    localStorage.setItem("isVerifying", "false");
     throw new Error(message);
   }
 };
@@ -86,8 +93,10 @@ export const verifyOtp = async ({ userId, otpCode }) => {
 // Lấy user hiện tại
 export const getCurrentUser = async () => {
   try {
-    const response = await api.get("/api/Auth/me", { withCredentials: true });
+    if(localStorage.getItem("isLoggedIn") === "true" && localStorage.getItem("isVerifying") === "false") {
+      const response = await api.get("/api/Auth/me", { withCredentials: true });
     return response.data;
+  }
   } catch (error) {
     throw error;
   }
@@ -111,6 +120,22 @@ export const register = async (data) => {
     return response.data;
   } catch (error) {
     const message = error.response?.data?.message || "Đăng ký thất bại";
+    throw new Error(message);
+  }
+};
+
+// Tạo mã QR
+export const generateQrCode = async () => {
+  try {
+    const response = await api.post("/api/Auth/generate-qr-code");
+    if (response.data.success) {
+      return response.data.data; // Trả về qrCode (chuỗi)
+    } else {
+      throw new Error(response.data.message);
+    }
+  } catch (error) {
+    const message = error.response?.data?.message || "Tạo mã QR thất bại.";
+    console.error("Generate QR code error:", error);
     throw new Error(message);
   }
 };

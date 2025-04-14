@@ -1,40 +1,47 @@
 using Auth.Core.Interfaces;
-using Auth.Infrastructure;
 using Auth.Infrastructure.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
+using Auth.Infrastructure.Data;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
 
-// Cấu hình CORS để hỗ trợ cookie từ FE
+// Cấu hình CORS
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("https://localhost:3000")
+        policy.WithOrigins("https://localhost:3000", "http://localhost:3000") // Hỗ trợ cả http và https
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
     });
 });
 
-// Đăng ký các dịch vụ cơ bản
+// Logging
+builder.Logging.ClearProviders();
+builder.Logging.AddConsole();
+builder.Logging.AddDebug();
+
+// Dịch vụ
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
-// Đăng ký IUserService
 builder.Services.AddScoped<IUserService, UserService>();
-
-// Đăng ký DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection"),
-        x => x.MigrationsAssembly("Auth.Infrastructure")));
+        x => x.MigrationsAssembly("Auth.Infrastructure.Data")));
 
-// Cấu hình xác thực sử dụng JWT
+// Cấu hình JWT
+var jwtKey = builder.Configuration["Jwt:Key"];
+if (string.IsNullOrEmpty(jwtKey))
+{
+    throw new InvalidOperationException("JWT Key is missing in appsettings.json.");
+}
+
 builder.Services.AddAuthentication(options =>
 {
     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -50,7 +57,8 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = builder.Configuration["Jwt:Issuer"],
         ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]))
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        ClockSkew = TimeSpan.FromSeconds(30)
     };
 
     options.Events = new JwtBearerEvents
@@ -58,10 +66,15 @@ builder.Services.AddAuthentication(options =>
         OnMessageReceived = context =>
         {
             var token = context.Request.Cookies["auth-token"];
-            Console.WriteLine($"Token from cookie (auth-token): {token}");
-            var csrfToken = context.Request.Cookies["X-CSRF-TOKEN"];
-            Console.WriteLine($"Token from cookie (X-CSRF-TOKEN): {csrfToken}");
-            context.Token = token;
+            if (!string.IsNullOrEmpty(token))
+            {
+                context.Token = token;
+                Console.WriteLine($"Token from cookie: {token.Substring(0, 10)}...");
+            }
+            else
+            {
+                Console.WriteLine("No auth-token found in cookies.");
+            }
             return Task.CompletedTask;
         },
         OnAuthenticationFailed = context =>
@@ -71,7 +84,7 @@ builder.Services.AddAuthentication(options =>
         },
         OnTokenValidated = context =>
         {
-            Console.WriteLine("Token validated successfully");
+            Console.WriteLine("Token validated successfully.");
             return Task.CompletedTask;
         }
     };
@@ -90,7 +103,7 @@ app.UseHttpsRedirection();
 app.UseCors("AllowFrontend");
 app.UseAuthentication();
 app.UseAuthorization();
-app.UseMiddleware<Auth.API.Middlewares.CsrfMiddleware>(); // Đã sửa middleware để bỏ qua [AllowAnonymous]
+app.UseMiddleware<Auth.API.Middlewares.CsrfMiddleware>();
 app.MapControllers();
 
 app.Run();

@@ -1,6 +1,6 @@
 using Auth.Core.Interfaces;
 using Auth.Core.Models;
-using Auth.Infrastructure;
+using Auth.Infrastructure.Data;
 using System.Linq;
 
 namespace Auth.Infrastructure.Services
@@ -17,7 +17,7 @@ namespace Auth.Infrastructure.Services
         public bool Login(string username, string password)
         {
             // Check username & password từ database (hiện tại chưa hash)
-            return _context.Users.Any(u => u.Username == username && u.Password == password);
+            return _context.Users.Any(u => u.Username == username && u.PasswordHash == password);
         }
 
         public List<string> GetUsernames()

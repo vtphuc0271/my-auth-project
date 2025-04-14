@@ -1,4 +1,3 @@
-// src/components/WelcomePage.jsx
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/authContext';
@@ -9,6 +8,10 @@ import {
   Container,
   Paper,
   Fade,
+  FormControl,
+  MenuItem,
+  Select,
+  InputLabel,
   Grow,
 } from '@mui/material';
 import { styled } from '@mui/material/styles';
@@ -35,7 +38,7 @@ const LogoutButton = styled(Button)(({ theme }) => ({
 const WelcomePage = () => {
   const navigate = useNavigate();
   const { isAuthenticated, username, logout } = useAuth();
-  const [loading, setLoading] = useState(true); // Thêm trạng thái loading
+  const [loading, setLoading] = useState(true); // Trạng thái loading
 
   // Kiểm tra trạng thái đăng nhập
   useEffect(() => {
@@ -110,14 +113,14 @@ const WelcomePage = () => {
               Cảm ơn bạn đã tham gia cùng chúng tôi. Hãy khám phá ứng dụng ngay bây giờ!
             </Typography>
 
-            {/* Nút Đăng Xuất với icon và hiệu ứng */}
-            <LogoutButton
-              variant="contained"
-              onClick={handleLogout}
-              startIcon={<LogoutIcon />}
-            >
-              Đăng Xuất
-            </LogoutButton>
+            {/* Nút Đăng Xuất và Phân quyền */}
+              <LogoutButton
+                variant="contained"
+                onClick={handleLogout}
+                startIcon={<LogoutIcon />}
+              >
+                Đăng Xuất
+              </LogoutButton>
           </Paper>
         </Fade>
       </Box>

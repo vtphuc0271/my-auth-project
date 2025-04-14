@@ -1,7 +1,8 @@
 ﻿using Auth.Core.Interfaces;
-using Auth.Core.Models;
 using Microsoft.EntityFrameworkCore;
 using BCrypt.Net;
+using Auth.Infrastructure.Data;
+using Auth.Core.Models.Entities;
 
 namespace Auth.Infrastructure.Services
 {
@@ -21,7 +22,7 @@ namespace Auth.Infrastructure.Services
                 .FirstOrDefaultAsync(u => u.Username == username);
 
             // Kiểm tra mật khẩu
-            if (user != null && BCrypt.Net.BCrypt.Verify(password, user.Password))
+            if (user != null && BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
             {
                 return user;
             }
@@ -33,6 +34,12 @@ namespace Auth.Infrastructure.Services
         {
             return await _context.Users
                 .FirstOrDefaultAsync(u => u.Username == username);
+        }
+
+        public async Task<User> GetUserByUserId(Guid userId)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.UserID == userId);
         }
 
         public async Task AddUser(User user)

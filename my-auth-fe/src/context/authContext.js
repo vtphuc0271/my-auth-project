@@ -1,9 +1,11 @@
+// src/context/authContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   login as loginAPI,
   logout as logoutAPI,
   getCurrentUser,
   verifyOtp,
+  generateQrCode, // Thêm import
 } from "../services/authService";
 
 const AuthContext = createContext();
@@ -16,9 +18,10 @@ export const AuthProvider = ({ children }) => {
   const setUser = (user) => {
     setIsAuthenticated(!!user);
     setUsername(user?.username || null);
+    localStorage.setItem("isLoggedIn", !!user ? "true" : "false");
   };
 
-  // Gọi API để kiểm tra user hiện tại (dành cho load lại trang)
+  // Kiểm tra trạng thái đăng nhập
   const checkAuth = async () => {
     setLoading(true);
     try {
@@ -42,27 +45,23 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, []);
-
+  
   // Đăng nhập
   const login = async (username, password) => {
     try {
       const result = await loginAPI({ username, password });
       if (result.requiresOtp) {
-        // Trả về thông tin cần OTP để component xử lý
         return {
           requiresOtp: true,
           userId: result.userId,
-          otpCode: result.otpCode, // Chỉ có khi mock
+          otpCode: result.otpCode,
         };
       } else {
-        // Không cần OTP, cập nhật state
         setUser(result.user.data);
         return { requiresOtp: false };
       }
     } catch (error) {
       setUser(null);
-      localStorage.setItem("isLoggedIn", "false");
-      console.error("Login failed:", error.message);
       throw error;
     }
   };
@@ -74,8 +73,6 @@ export const AuthProvider = ({ children }) => {
       setUser(user.data);
     } catch (error) {
       setUser(null);
-      localStorage.setItem("isLoggedIn", "false");
-      console.error("Verify OTP failed:", error.message);
       throw error;
     }
   };
@@ -88,15 +85,35 @@ export const AuthProvider = ({ children }) => {
       console.warn("Logout failed:", error.message);
     } finally {
       setUser(null);
-      localStorage.setItem("isLoggedIn", "false");
     }
   };
+
+  // Polling kiểm tra trạng thái đăng nhập sau khi quét QR
+  useEffect(() => {
+    let interval;
+    if (!isAuthenticated) {
+      interval = setInterval(async () => {
+        try {
+          const user = await getCurrentUser();
+          if (user) {
+            setUser(user.data); // Cập nhật user nếu đăng nhập thành công
+          }
+        } catch (error) {
+          if (error.response?.status !== 401) {
+            console.error("Check auth error:", error.message);
+          }
+        }
+      }, 5000); // Kiểm tra mỗi 5 giây
+    }
+    return () => clearInterval(interval);
+  }, [isAuthenticated]);
 
   const contextValue = {
     isAuthenticated,
     username,
     login,
     verifyOtp: verifyOtpHandler,
+    generateQrCode, // Thêm vào context
     logout,
     loading,
   };

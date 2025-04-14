@@ -1,10 +1,11 @@
 ﻿using Auth.Core.Interfaces;
 using Auth.Core.Models;
 using Microsoft.AspNetCore.Mvc;
-using Auth.Infrastructure;
 using Microsoft.AspNetCore.Authorization;
-using Auth.Core.DTOs;
-using System.Security.Claims; // Thêm để lấy UserId từ token
+using AuthApi.DTOs;
+using System.Security.Claims;
+using Auth.Infrastructure.Data;
+using Auth.Core.Models.Entities; // Thêm để lấy UserId từ token
 
 namespace AuthApi.Controllers
 {
@@ -43,10 +44,11 @@ namespace AuthApi.Controllers
 
             var user = new User
             {
-                Id = Guid.NewGuid(),
+                UserID = Guid.NewGuid(),
                 Username = request.Username,
-                Password = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                PhoneNumber = null
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password), // Đổi Password thành PasswordHash
+                PhoneNumber = null,
+                Email = null
             };
 
             await _userService.AddUser(user);
@@ -69,9 +71,9 @@ namespace AuthApi.Controllers
             var users = await _userService.GetAllUsers();
             foreach (var user in users)
             {
-                if (!user.Password.StartsWith("$2a$"))
+                if (!user.PasswordHash.StartsWith("$2a$")) // Đổi Password thành PasswordHash
                 {
-                    user.Password = BCrypt.Net.BCrypt.HashPassword(user.Password);
+                    user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(user.PasswordHash);
                     _context.Users.Update(user);
                 }
             }
@@ -83,31 +85,24 @@ namespace AuthApi.Controllers
         [HttpPost("update-phone")]
         public async Task<IActionResult> UpdatePhone([FromBody] UpdatePhoneRequest request)
         {
-            if (!ModelState.IsValid)
-            {
-                return BadRequest(new ApiResponse<object>(false, "Dữ liệu không hợp lệ", null));
-            }
-
-            // Lấy UserId từ JWT token
             var userIdString = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            if (string.IsNullOrEmpty(userIdString) || !Guid.TryParse(userIdString, out var userId))
+
+            if (!Guid.TryParse(userIdString, out var userId))
             {
                 return Unauthorized(new ApiResponse<object>(false, "Không thể xác định người dùng", null));
             }
 
-            // Tìm user trong DB
             var user = await _context.Users.FindAsync(userId);
             if (user == null)
             {
                 return NotFound(new ApiResponse<object>(false, "Người dùng không tồn tại", null));
             }
 
-            // Cập nhật PhoneNumber
             user.PhoneNumber = request.PhoneNumber;
-            _context.Users.Update(user);
             await _context.SaveChangesAsync();
 
             return Ok(new ApiResponse<object>(true, "Cập nhật số điện thoại thành công", null));
         }
+
     }
 }

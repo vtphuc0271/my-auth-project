@@ -1,3 +1,4 @@
+// src/App.jsx
 import React from "react";
 import { BrowserRouter as Router, Link } from "react-router-dom";
 import AppRoutes from "./routes/authRoutes";
@@ -43,7 +44,7 @@ function App() {
     <AuthProvider>
       <Router>
         <Navigation />
-        <Container maxWidth="sm" sx={{ mt: 4 }}>
+        <Container maxWidth="md" sx={{ mt: 4 }}> {/* Tăng từ sm lên md */}
           <AppRoutes />
         </Container>
       </Router>

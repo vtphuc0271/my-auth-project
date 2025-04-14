@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace Auth.Core.Models
+namespace Auth.Core.Models.Entities
 {
     public class OtpRecord
     {
