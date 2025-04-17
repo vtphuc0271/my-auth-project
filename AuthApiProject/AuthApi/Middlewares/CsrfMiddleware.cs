@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using static System.Net.WebRequestMethods;
 
 namespace Auth.API.Middlewares
 {
@@ -32,10 +33,13 @@ namespace Auth.API.Middlewares
             // Bỏ qua CSRF cho các endpoint không yêu cầu xác thực
             var bypassPaths = new[]
             {
-                "/api/auth/login",
-                "/api/auth/logout",
-                "/api/auth/verify-otp",
-                "/api/account/register"
+                "/auth/login",
+                "/auth/logout",
+                "/auth/verify-otp", // Thêm để bỏ qua CSRF cho verify-otp
+                "/user/register",
+                "/auth/generate-qr-code",
+                "/user/otp-reset-password",
+                "/user/reset-password",
             };
 
             if (bypassPaths.Contains(path))
@@ -71,10 +75,10 @@ namespace Auth.API.Middlewares
 
                 _logger.LogDebug("CSRF token hợp lệ: {Path}", path);
             }
-            else if (HttpMethods.IsGet(context.Request.Method) && path == "/api/auth/me")
+            else if (HttpMethods.IsGet(context.Request.Method) && path == "/auth/me")
             {
-                // Đặc biệt cho /api/auth/me, chỉ cần auth-token
-                _logger.LogDebug("Bỏ qua CSRF check cho GET /api/auth/me");
+                // Đặc biệt cho /auth/me, chỉ cần auth-token
+                _logger.LogDebug("Bỏ qua CSRF check cho GET /auth/me");
             }
 
             await _next(context);

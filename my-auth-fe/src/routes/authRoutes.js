@@ -5,6 +5,7 @@ import LoginForm from "../pages/LoginForm";
 import RegisterForm from "../pages/RegisterForm";
 import WelcomePage from "../pages/WelcomePage";
 import { useAuth } from "../context/authContext"; // Không cần AuthProvider ở đây nữa
+import ForgotPasswordForm from "../pages/ForgotPasswordForm";
 
 const AppRoutes = () => {
   const { isAuthenticated } = useAuth();
@@ -26,6 +27,12 @@ const AppRoutes = () => {
       />
       <Route path="/register" 
         element={isAuthenticated ? <WelcomePage /> : <RegisterForm />} 
+      />
+      <Route path="/forgot-password" 
+        element={isAuthenticated ? <WelcomePage /> : <ForgotPasswordForm />} 
+      />
+      <Route path="/otp-forgot-password" 
+        element={isAuthenticated ? <WelcomePage /> : <ForgotPasswordForm />} 
       />
     </Routes>
   );

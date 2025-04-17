@@ -11,7 +11,7 @@ const Navigation = () => {
     <AppBar position="static" color="primary">
       <Toolbar sx={{ display: "flex", justifyContent: "space-between" }}>
         <Typography variant="h6" color="inherit">
-          My Auth App
+          Fodicom
         </Typography>
         <Box>
           {isAuthenticated ? (
@@ -44,7 +44,7 @@ function App() {
     <AuthProvider>
       <Router>
         <Navigation />
-        <Container maxWidth="md" sx={{ mt: 4 }}> {/* Tăng từ sm lên md */}
+            <Container maxWidth="md" sx={{ mt: 4 }}> {/* Tăng từ sm lên md */}
           <AppRoutes />
         </Container>
       </Router>

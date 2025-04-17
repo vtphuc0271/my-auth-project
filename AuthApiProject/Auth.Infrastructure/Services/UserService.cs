@@ -15,11 +15,11 @@ namespace Auth.Infrastructure.Services
             _context = context;
         }
 
-        public async Task<User?> AuthenticateAsync(string username, string password)
+        public async Task<User?> AuthenticateAsync(string phoneNumber, string password)
         {
             // Tìm người dùng theo username trong database
             var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.Username == username);
+                .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
 
             // Kiểm tra mật khẩu
             if (user != null && BCrypt.Net.BCrypt.Verify(password, user.PasswordHash))
@@ -34,6 +34,12 @@ namespace Auth.Infrastructure.Services
         {
             return await _context.Users
                 .FirstOrDefaultAsync(u => u.Username == username);
+        }
+
+        public async Task<User> GetUserByPhone(string phoneNumber)
+        {
+            return await _context.Users
+                .FirstOrDefaultAsync(u => u.PhoneNumber == phoneNumber);
         }
 
         public async Task<User> GetUserByUserId(Guid userId)

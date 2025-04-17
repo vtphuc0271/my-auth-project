@@ -7,9 +7,9 @@ using System.Threading.Tasks;
 
 namespace AuthApi.DTOs
 {
-    public class UpdatePhoneRequest
+    public class UpdateUserNameRequest
     {
-        [Required(ErrorMessage = "Số điện thoại là bắt buộc")]
-        public string PhoneNumber { get; set; }
+        [Required(ErrorMessage = "tên người dùng là bắt buộc")]
+        public string newUsername { get; set; }
     }
 }

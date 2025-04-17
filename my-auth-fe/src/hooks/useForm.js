@@ -9,10 +9,13 @@ const useForm = (initialValues, validate, onSubmit) => {
 
   // Xử lý thay đổi input
   const handleChange = useCallback((e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
+
+    // Lấy giá trị dựa trên type của input
+    const newValue = type === 'checkbox' ? checked : value;
 
     setValues((prev) => {
-      const newValues = { ...prev, [name]: value };
+      const newValues = { ...prev, [name]: newValue };
       setErrors(validate(newValues));
       return newValues;
     });
@@ -54,8 +57,8 @@ const useForm = (initialValues, validate, onSubmit) => {
     handleChange,
     handleBlur,
     handleSubmit,
-    setValues,    // tiện để reset form nếu cần
-    setErrors,    // tùy chỉnh lỗi từ ngoài (ví dụ: sau khi submit)
+    setValues,
+    setErrors,
   };
 };
 

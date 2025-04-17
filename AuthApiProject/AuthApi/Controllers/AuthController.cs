@@ -15,15 +15,15 @@ using System.Security.Cryptography;
 
 namespace AuthApi.Controllers
 {
-    [Route("api/[controller]")]
+    [Route("[controller]")]
     [ApiController]
     public class AuthController : ControllerBase
     {
         private readonly IConfiguration _configuration;
-        private readonly IUserService _userService;
         private readonly IWebHostEnvironment _environment;
-        private readonly AppDbContext _dbContext;
         private readonly ILogger<AuthController> _logger;
+        private readonly IUserService _userService;
+        private readonly AppDbContext _dbContext;
 
         public AuthController(
             IConfiguration configuration,
@@ -33,118 +33,36 @@ namespace AuthApi.Controllers
             ILogger<AuthController> logger)
         {
             _configuration = configuration;
-            _userService = userService;
             _environment = environment;
-            _dbContext = dbContext;
             _logger = logger;
+            _userService = userService;
+            _dbContext = dbContext;
         }
 
         [AllowAnonymous]
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
-            _logger.LogInformation($"Received login request for username: {request?.Username}");
+            _logger.LogInformation($"Nhận yêu cầu đăng nhập từ người dùng: {request?.PhoneNumber}");
 
             if (!ModelState.IsValid)
             {
-                _logger.LogWarning($"Login request failed due to invalid model state.");
-                return BadRequest(new ApiResponse<object>(false, "Invalid data", ModelState.ToDictionary(
+                _logger.LogWarning($"Yêu cầu đăng nhập thất bại vì model không hợp lệ.");
+                return BadRequest(new ApiResponse<object>(false, "Dữ liệu không hợp lệ", ModelState.ToDictionary(
                     kvp => kvp.Key, kvp => kvp.Value.Errors.Select(e => e.ErrorMessage).ToArray())));
             }
 
-            var user = await _userService.AuthenticateAsync(request.Username, request.Password);
+            var user = await _userService.AuthenticateAsync(request.PhoneNumber, request.Password);
 
             if (user == null)
             {
-                _logger.LogWarning($"Authentication failed for username: {request.Username}. Invalid credentials.");
-                return Unauthorized(new ApiResponse<object>(false, "Invalid username or password", null));
+                _logger.LogWarning($"Xác thực thất bại cho người dùng: {request.PhoneNumber}. Thông tin xác thực không hợp lệ.");
+                return Unauthorized(new ApiResponse<object>(false, "Số điện thoại hoặc mật khẩu không hợp lệ", null));
             }
 
-            _logger.LogInformation($"User authenticated successfully. User ID: {user.UserID}, Username: {user.Username}");
+            _logger.LogInformation($"Xác thực người dùng thành công. User ID: {user.UserID}, Username: {user.Username}");
 
-            if (!string.IsNullOrEmpty(user.PhoneNumber))
-            {
-                return await HandleOtpLogin(user);
-            }
-
-            return await GenerateTokensAndSetCookies(user);
-        }
-
-        private async Task<IActionResult> HandleOtpLogin(User user)
-        {
-            var otpCode = GenerateSecureOtpCode();
-            var otp = new OtpRecord
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.UserID,
-                OtpCode = otpCode,
-                CreatedAt = DateTime.UtcNow,
-                ExpiresAt = DateTime.UtcNow.AddMinutes(_configuration.GetValue<int>("Otp:ExpiryMinutes", 5)),
-                IsUsed = false
-            };
-
-            _dbContext.OtpRecords.Add(otp);
-            try
-            {
-                await _dbContext.SaveChangesAsync();
-                _logger.LogInformation($"Generated and saved OTP for User ID: {user.UserID}, OTP Code: {otpCode}");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error saving OTP to database for User ID: {user.UserID}. Error: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<object>(false, "Error saving OTP", null));
-            }
-
-            if (_environment.IsDevelopment())
-            {
-                _logger.LogInformation($"[DEVELOPMENT] Mock OTP sent to User ID: {user.UserID}, OTP Code: {otpCode}");
-                return Ok(new ApiResponse<object>(true, "OTP sent to phone (mock)", new { RequiresOtp = true, UserId = user.UserID, OtpCode = otpCode }));
-            }
-
-            try
-            {
-                await SendOtpViaTwilio(user.PhoneNumber, otpCode);
-                return Ok(new ApiResponse<object>(true, "OTP sent to phone", new { RequiresOtp = true, UserId = user.UserID }));
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError($"Error sending OTP for User ID: {user.UserID}. Error: {ex.Message}");
-                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<object>(false, "Error sending OTP", null));
-            }
-        }
-
-        [AllowAnonymous]
-        [HttpPost("verify-otp")]
-        public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
-        {
-            var otp = await _dbContext.OtpRecords
-                .FirstOrDefaultAsync(o => o.UserId == request.UserId && o.OtpCode == request.OtpCode && !o.IsUsed && o.ExpiresAt > DateTime.UtcNow);
-
-            if (otp == null)
-            {
-                return BadRequest(new ApiResponse<object>(false, "Invalid or expired OTP", null));
-            }
-
-            otp.IsUsed = true;
-            await _dbContext.SaveChangesAsync();
-
-            var user = await _dbContext.Users.FindAsync(request.UserId);
-            if (user == null)
-            {
-                return BadRequest(new ApiResponse<object>(false, "User does not exist", null));
-
-            }
-
-            return await GenerateTokensAndSetCookies(user);
-        }
-
-        [HttpPost("logout")]
-        public IActionResult Logout()
-        {
-            Response.Cookies.Delete("auth-token");
-            Response.Cookies.Delete("X-CSRF-TOKEN");
-            _logger.LogInformation("User logged out successfully.");
-            return Ok(new ApiResponse<object>(true, "Logout successful", null));
+            return await HandleOtpLogin(user);
         }
 
         [Authorize]
@@ -153,15 +71,53 @@ namespace AuthApi.Controllers
         {
             if (!User.Identity.IsAuthenticated)
             {
-                return Unauthorized(new ApiResponse<object>(false, "User is not authenticated. Please log in.", null));
+                return Unauthorized(new ApiResponse<object>(false, "Chưa xác nhận được người dùng, vui lòng đăng nhập", null));
             }
 
             var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-            var username = User.FindFirst(ClaimTypes.Name)?.Value;
+            var user = _userService.GetUserByUserId(Guid.Parse(userId));
 
-            return Ok(new ApiResponse<object>(true, "User information retrieved successfully", new { userId, username }));
+            return Ok(new ApiResponse<object>(true, "Lấy thông tin người dùng thành công", new { userId, user.Result.Username }));
         }
 
+        [Authorize]
+        [HttpPost("verify-otp")]
+        public async Task<IActionResult> VerifyOtp([FromBody] VerifyOtpRequest request)
+        {
+            _logger.LogInformation($"Nhận yêu cầu verify OTP cho UserId: {request.UserId}, OtpCode: {request.OtpCode}");
+            _logger.LogInformation($"Cookies nhận được: {string.Join(", ", Request.Cookies.Select(c => $"{c.Key}={c.Value}"))}");
+
+            var otp = await _dbContext.OtpRecords
+                .FirstOrDefaultAsync(o => o.UserId == request.UserId && o.OtpCode == request.OtpCode && !o.IsUsed && o.ExpiresAt > DateTime.UtcNow);
+
+            if (otp == null)
+            {
+                _logger.LogWarning($"OTP không hợp lệ hoặc đã hết hạn cho UserId: {request.UserId}");
+                return BadRequest(new ApiResponse<object>(false, "Mã OTP không hợp lệ hoặc đã hết hạn.", null));
+            }
+
+            otp.IsUsed = true;
+            await _dbContext.SaveChangesAsync();
+
+            var user = await _dbContext.Users.FindAsync(request.UserId);
+            if (user == null)
+            {
+                _logger.LogWarning($"Không tìm thấy người dùng với UserId: {request.UserId}");
+                return BadRequest(new ApiResponse<object>(false, "Người dùng không tồn tại", null));
+            }
+
+            _logger.LogInformation($"Xác thực OTP thành công cho UserId: {request.UserId}");
+            return Ok(new ApiResponse<object>(true, "Xác thực OTP thành công.", new { Username = user.Username }));
+        }
+
+        [HttpPost("logout")]
+        public IActionResult Logout()
+        {
+            Response.Cookies.Delete("auth-token");
+            Response.Cookies.Delete("X-CSRF-TOKEN");
+            _logger.LogInformation("Người dùng đăng xuất thành công.");
+            return Ok(new ApiResponse<object>(true, "Đăng xuất thành công", null));
+        }
 
         [AllowAnonymous]
         [HttpPost("generate-qr-code")]
@@ -238,6 +194,53 @@ namespace AuthApi.Controllers
             return Ok(new ApiResponse<object>(true, "Xác thực QR thành công", null));
         }
 
+        // Xử lý đăng nhập
+        private async Task<IActionResult> HandleOtpLogin(User user)
+        {
+            var otpCode = GenerateSecureOtpCode();
+            var otp = new OtpRecord
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.UserID,
+                OtpCode = otpCode,
+                CreatedAt = DateTime.UtcNow,
+                ExpiresAt = DateTime.UtcNow.AddMinutes(_configuration.GetValue<int>("Otp:số phút hết hạn", 5)),
+                IsUsed = false
+            };
+
+            _dbContext.OtpRecords.Add(otp);
+            try
+            {
+                await _dbContext.SaveChangesAsync();
+                _logger.LogInformation($"Mã OTP được tạo và lưu cho UserId: {user.UserID}, Mã OTP: {otpCode}");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Lỗi khi lưu OTP vào CSDL cho UserId: {user.UserID}. Error: {ex.Message}");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<object>(false, "Lỗi lưu OTP", null));
+            }
+
+            await GenerateTokensAndSetCookies(user);
+
+            if (_environment.IsDevelopment())
+            {
+                _logger.LogInformation($"[Phát triển] Đã gửi mã OTP giả cho UserId: {user.UserID}, OTP Code: {otpCode}");
+                return Ok(new ApiResponse<object>(true, "Đã gửi mã OTP (giả)", new { RequiresOtp = true, UserId = user.UserID, OtpCode = otpCode }));
+            }
+
+            try
+            {
+                await SendOtpViaTwilio(user.PhoneNumber, otpCode);
+                return Ok(new ApiResponse<object>(true, "Đã gửi OTP đến điện thoại", new { RequiresOtp = true, UserId = user.UserID }));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError($"Lỗi khi gửi OTP cho UserId: {user.UserID}. Error: {ex.Message}");
+                return StatusCode(StatusCodes.Status500InternalServerError, new ApiResponse<object>(false, "Lỗi khi gửi OTP", null));
+            }
+        }
+
+        // Tạo token và cookie
         private async Task<IActionResult> GenerateTokensAndSetCookies(User user)
         {
             var (token, expires) = GenerateJwtToken(user);
@@ -253,7 +256,7 @@ namespace AuthApi.Controllers
                 Expires = expires,
                 Path = "/"
             });
-            _logger.LogInformation($"Set 'auth-token' cookie for User ID: {user.UserID}. Expires at: {expires}");
+            _logger.LogInformation($"Đã đặt cookie 'auth-token' cho UserId: {user.UserID}, hết hạn: {expires}");
 
             Response.Cookies.Append("X-CSRF-TOKEN", csrfToken, new CookieOptions
             {
@@ -263,30 +266,32 @@ namespace AuthApi.Controllers
                 Expires = expires,
                 Path = "/"
             });
-            _logger.LogInformation($"Set 'X-CSRF-TOKEN' cookie for User ID: {user.UserID}. Expires at: {expires}");
+            _logger.LogInformation($"Đã đặt cookie 'X-CSRF-TOKEN' cho UserId: {user.UserID}, hết hạn: {expires}");
 
-            return Ok(new ApiResponse<object>(true, "Login successful", null));
+            return Ok(new ApiResponse<object>(true, "Đăng nhập thành công", new { csrfToken }));
         }
 
+        // Tạo JWT token
         private (string token, DateTime expires) GenerateJwtToken(User user)
         {
             var claims = new[]
             {
                 new Claim(ClaimTypes.NameIdentifier, user.UserID.ToString()),
+                new Claim(ClaimTypes.MobilePhone, user.PhoneNumber),
                 new Claim(ClaimTypes.Name, user.Username)
             };
 
             var jwtKey = _configuration["Jwt:Key"];
             if (string.IsNullOrEmpty(jwtKey))
             {
-                _logger.LogError("JWT key is missing in configuration.");
-                throw new InvalidOperationException("JWT key is not configured.");
+                _logger.LogError("Không tìm thấy khóa JWT trong cấu hình.");
+                throw new InvalidOperationException("Khóa JWT chưa được cấu hình.");
             }
 
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+            var expires = DateTime.UtcNow.AddHours(24); // Tăng thời gian hết hạn lên 24 giờ
 
-            var expires = DateTime.UtcNow.AddMinutes(_configuration.GetValue<int>("Jwt:TokenExpirationInMinutes", 30));
             var token = new JwtSecurityToken(
                 issuer: _configuration["Jwt:Issuer"],
                 audience: _configuration["Jwt:Audience"],
@@ -298,17 +303,19 @@ namespace AuthApi.Controllers
             return (new JwtSecurityTokenHandler().WriteToken(token), expires);
         }
 
+        // Tạo mã OTP
         private string GenerateSecureOtpCode()
         {
             using (var rng = RandomNumberGenerator.Create())
             {
                 byte[] bytes = new byte[4];
                 rng.GetBytes(bytes);
-                var number = BitConverter.ToUInt32(bytes, 0) % 900000 + 100000; // Ensures 6-digit OTP (100000-999999)
+                var number = BitConverter.ToUInt32(bytes, 0) % 900000 + 100000; // Đảm bảo OTP 6 chữ số
                 return number.ToString("D6");
             }
         }
 
+        // Gửi OTP qua Twilio
         private async Task SendOtpViaTwilio(string phoneNumber, string otpCode)
         {
             var twilioAccountSid = _configuration["Twilio:AccountSid"];
@@ -326,7 +333,7 @@ namespace AuthApi.Controllers
                 to: new Twilio.Types.PhoneNumber(formattedToNumber)
             );
 
-            _logger.LogInformation($"OTP sent successfully via Twilio to: {formattedToNumber}. Message SID: {message.Sid}");
+            _logger.LogInformation($"OTP gửi thành công qua Twilio đến: {formattedToNumber}. Message SID: {message.Sid}");
         }
     }
 }

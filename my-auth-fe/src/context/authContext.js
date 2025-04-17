@@ -1,37 +1,48 @@
-// src/context/authContext.jsx
 import React, { createContext, useContext, useState, useEffect } from "react";
 import {
   login as loginAPI,
   logout as logoutAPI,
   getCurrentUser,
   verifyOtp,
-  generateQrCode, // Thêm import
+  generateQrCode,
 } from "../services/authService";
-
+import { Typography } from "@mui/material";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [username, setUsername] = useState(null);
+  const [requiresOtp, setRequiresOtp] = useState(false);
+  const [userId, setUserId] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isQrLoginActive, setIsQrLoginActive] = useState(false);
 
   const setUser = (user) => {
+    console.log("Đặt thông tin người dùng:", user);
     setIsAuthenticated(!!user);
     setUsername(user?.username || null);
     localStorage.setItem("isLoggedIn", !!user ? "true" : "false");
   };
 
-  // Kiểm tra trạng thái đăng nhập
   const checkAuth = async () => {
     setLoading(true);
     try {
       const user = await getCurrentUser();
-      setUser(user);
-    } catch (error) {
-      if (error.response?.status !== 401) {
-        console.error("Check auth error:", error.message);
+      console.log("Kết quả kiểm tra xác thực:", user);
+      if (user?.success && user.data) {
+        setUser(user.data);
+        setRequiresOtp(false);
+        setUserId(null);
+      } else {
+        setUser(null);
+        setRequiresOtp(false);
+        setUserId(null);
       }
+    } catch (error) {
+      console.error("Lỗi kiểm tra xác thực:", error.message);
       setUser(null);
+      setRequiresOtp(false);
+      setUserId(null);
     } finally {
       setLoading(false);
     }
@@ -45,82 +56,99 @@ export const AuthProvider = ({ children }) => {
       setLoading(false);
     }
   }, []);
-  
-  // Đăng nhập
-  const login = async (username, password) => {
+
+  const login = async (phoneNumber, password) => {
     try {
-      const result = await loginAPI({ username, password });
-      if (result.requiresOtp) {
+      const result = await loginAPI({ phoneNumber, password });
+      console.log("Kết quả đăng nhập:", result);
+      if (result.userId && result.requiresOtp) {
+        setRequiresOtp(true);
+        setUserId(result.userId);
         return {
           requiresOtp: true,
           userId: result.userId,
           otpCode: result.otpCode,
         };
-      } else {
-        setUser(result.user.data);
-        return { requiresOtp: false };
       }
+      throw new Error("Đăng nhập không hỗ trợ trường hợp không yêu cầu OTP.");
     } catch (error) {
       setUser(null);
+      setRequiresOtp(false);
+      setUserId(null);
       throw error;
     }
   };
 
-  // Xác thực OTP
   const verifyOtpHandler = async (userId, otpCode) => {
     try {
-      const user = await verifyOtp({ userId, otpCode });
-      setUser(user.data);
+      await verifyOtp({ userId, otpCode });
+      const user = await getCurrentUser();
+      console.log("Người dùng sau xác thực OTP:", user);
+      if (user?.success && user.data) {
+        setUser(user.data);
+        setRequiresOtp(false);
+        setUserId(null);
+      } else {
+        throw new Error("Không thể lấy thông tin người dùng sau khi xác thực OTP.");
+      }
     } catch (error) {
+      console.error("Lỗi xác thực OTP:", error.message);
       setUser(null);
+      setRequiresOtp(false);
+      setUserId(null);
       throw error;
     }
   };
 
-  // Đăng xuất
   const logout = async () => {
     try {
       await logoutAPI();
     } catch (error) {
-      console.warn("Logout failed:", error.message);
+      console.warn("Đăng xuất thất bại:", error.message);
     } finally {
       setUser(null);
+      setRequiresOtp(false);
+      setUserId(null);
+      localStorage.setItem("isLoggedIn", "false");
     }
   };
 
-  // Polling kiểm tra trạng thái đăng nhập sau khi quét QR
   useEffect(() => {
     let interval;
-    if (!isAuthenticated) {
+    if (!isAuthenticated && isQrLoginActive) {
       interval = setInterval(async () => {
         try {
           const user = await getCurrentUser();
-          if (user) {
-            setUser(user.data); // Cập nhật user nếu đăng nhập thành công
+          if (user?.success && user.data) {
+            setUser(user.data);
+            setIsQrLoginActive(false);
           }
         } catch (error) {
           if (error.response?.status !== 401) {
-            console.error("Check auth error:", error.message);
+            console.error("Lỗi kiểm tra QR auth:", error.message);
           }
         }
-      }, 5000); // Kiểm tra mỗi 5 giây
+      }, 5000);
     }
     return () => clearInterval(interval);
-  }, [isAuthenticated]);
+  }, [isAuthenticated, isQrLoginActive]);
 
   const contextValue = {
     isAuthenticated,
     username,
+    requiresOtp,
+    userId,
     login,
     verifyOtp: verifyOtpHandler,
-    generateQrCode, // Thêm vào context
+    generateQrCode,
     logout,
     loading,
+    setIsQrLoginActive,
   };
 
   return (
     <AuthContext.Provider value={contextValue}>
-      {loading ? <div>Loading...</div> : children}
+      {loading ? <Typography>Đang tải...</Typography> : children}
     </AuthContext.Provider>
   );
 };
@@ -128,7 +156,7 @@ export const AuthProvider = ({ children }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
+    throw new Error("useAuth phải được sử dụng trong AuthProvider");
   }
   return context;
 };

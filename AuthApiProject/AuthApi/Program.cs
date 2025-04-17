@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
 using Auth.Infrastructure.Data;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddControllers();
@@ -14,7 +15,10 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins("https://localhost:3000", "http://localhost:3000") // Hỗ trợ cả http và https
+        policy.WithOrigins(
+                  "http://localhost:3000", // Hỗ trợ localhost cho phát triển
+                  "https://my1stapp.com:3000",
+                  "http://my1stapp.com:3000")
               .AllowAnyHeader()
               .AllowAnyMethod()
               .AllowCredentials();
@@ -65,26 +69,29 @@ builder.Services.AddAuthentication(options =>
     {
         OnMessageReceived = context =>
         {
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
             var token = context.Request.Cookies["auth-token"];
             if (!string.IsNullOrEmpty(token))
             {
                 context.Token = token;
-                Console.WriteLine($"Token from cookie: {token.Substring(0, 10)}...");
+                logger.LogInformation($"Đọc token từ cookie: {token.Substring(0, 10)}...");
             }
             else
             {
-                Console.WriteLine("No auth-token found in cookies.");
+                logger.LogWarning("Không tìm thấy auth-token trong cookies.");
             }
             return Task.CompletedTask;
         },
         OnAuthenticationFailed = context =>
         {
-            Console.WriteLine($"Authentication failed: {context.Exception.Message}");
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogError($"Xác thực JWT thất bại: {context.Exception.Message}");
             return Task.CompletedTask;
         },
         OnTokenValidated = context =>
         {
-            Console.WriteLine("Token validated successfully.");
+            var logger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+            logger.LogInformation("Kiểm tra token thành công.");
             return Task.CompletedTask;
         }
     };
